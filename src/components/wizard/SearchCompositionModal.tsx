@@ -93,8 +93,10 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
               <p className="text-sm">Buscando na base oficial...</p>
             </div>
           ) : results.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-crea-gray-500 p-6 text-center">
-              <p className="text-sm">Nenhuma composição encontrada para &ldquo;{debouncedSearch}&rdquo;.</p>
+            <div className="h-full flex flex-col items-center justify-center text-crea-gray-500 p-6 text-center space-y-2">
+              <Search className="w-10 h-10 text-crea-gray-300 mb-2" />
+              <p className="text-sm font-medium">Nenhuma composição exata encontrada para este termo.</p>
+              <p className="text-xs text-crea-gray-400">Tente simplificar a busca.</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -105,13 +107,13 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
                   className="w-full text-left p-3 hover:bg-crea-blue-50 border border-transparent hover:border-crea-blue-100 rounded-lg transition-colors group flex flex-col gap-1"
                 >
                   <div className="flex justify-between items-start w-full">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-sm text-crea-blue-900 group-hover:text-crea-blue-700">{item.code}</span>
                       <Badge variant={item.base_id === BASE_IDS.SINAPI ? 'sinapi' : item.base_id === BASE_IDS.SICRO ? 'sicro' : 'default'} className="text-[10px] py-0">
-                        {item.base_id === BASE_IDS.SINAPI ? 'SINAPI' : item.base_id === BASE_IDS.SICRO ? 'SICRO' : 'Desconhecido'}
+                        {item.base_id === BASE_IDS.SINAPI ? '[SINAPI MA]' : item.base_id === BASE_IDS.SICRO ? '[SICRO]' : 'Desconhecido'}
                       </Badge>
                     </div>
-                    <span className="text-xs font-semibold text-crea-gray-500 bg-crea-gray-100 px-2 py-0.5 rounded">{item.unit}</span>
+                    <span className="text-xs font-semibold text-crea-gray-500 bg-crea-gray-100 px-2 py-0.5 rounded shrink-0">{item.unit}</span>
                   </div>
                   <span className="text-sm text-crea-gray-700 leading-snug line-clamp-2">{item.description}</span>
                   <span className="text-xs font-medium text-crea-gray-500 mt-1">

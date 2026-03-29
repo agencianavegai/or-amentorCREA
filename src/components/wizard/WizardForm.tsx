@@ -173,7 +173,9 @@ export function WizardForm() {
     } else if (currentStep === 2) {
       isValid = await form.trigger(["quantitativos.itens"])
       const items = form.getValues("quantitativos.itens") || []
-      if (isValid && items.some(i => !i.quantidade || i.quantidade <= 0)) {
+      
+      // Bloqueia se a lista estiver vazia ou com itens que não possuem quantidade
+      if (items.length === 0 || (isValid && items.some(i => !i.quantidade || i.quantidade <= 0))) {
         isValid = false
       }
     } else if (currentStep === 4) {
