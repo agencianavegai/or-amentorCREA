@@ -2,10 +2,15 @@ import { z } from "zod"
 
 // ---------- Etapa 1: Setup do Projeto ----------
 export const setupSchema = z.object({
+  nomeProfissional: z.string().min(3, "Nome do profissional deve ter ao menos 3 caracteres"),
+  registroCrea: z.string().min(5, "CREA inválido"),
   nomeObra: z.string().min(3, "Nome da obra deve ter ao menos 3 caracteres"),
+  descricaoObra: z.string().optional(),
   cliente: z.string().min(2, "Nome do cliente é obrigatório"),
+  documentoCliente: z.string().min(11, "CPF/CNPJ inválido"),
   baseReferencia: z.enum(["sinapi", "sicro"]),
   mesReferencia: z.string().optional(),
+  isDesonerado: z.boolean().default(false),
 })
 
 // ---------- Etapa 2: Busca por IA ----------

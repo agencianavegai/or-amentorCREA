@@ -158,8 +158,12 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: Orca
             <Text style={styles.value}>{data.setup.nomeObra || "Não preenchido"}</Text>
           </View>
           <View style={styles.rowInfo}>
+            <Text style={styles.label}>Regime:</Text>
+            <Text style={styles.value}>{data.setup.isDesonerado ? "Desonerado" : "Não Desonerado"}</Text>
+          </View>
+          <View style={styles.rowInfo}>
             <Text style={styles.label}>Cliente/Órgão:</Text>
-            <Text style={styles.value}>{data.setup.cliente || "Não preenchido"}</Text>
+            <Text style={styles.value}>{data.setup.cliente || "Não preenchido"} - CPF/CNPJ: {data.setup.documentoCliente || "Não informado"}</Text>
           </View>
           <View style={styles.rowInfo}>
             <Text style={styles.label}>Base de Referência:</Text>
@@ -217,8 +221,8 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: Orca
 
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine} />
-            <Text style={styles.signatureText}>Engenheiro(a) Responsável</Text>
-            <Text style={styles.signatureText}>CREA: ___________________</Text>
+            <Text style={styles.signatureText}>Responsável Técnico: {data.setup.nomeProfissional}</Text>
+            <Text style={styles.signatureText}>CREA: {data.setup.registroCrea}</Text>
           </View>
         </View>
 

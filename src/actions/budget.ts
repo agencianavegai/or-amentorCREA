@@ -34,7 +34,8 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
         .from('users')
         .insert([{ 
           email: 'guest@copiloto.app', 
-          full_name: 'Usuário Convidado (Sistema)' 
+          full_name: data.setup.nomeProfissional || 'Usuário Convidado (Sistema)',
+          crea_registration: data.setup.registroCrea
         }])
         .select('id')
         .single()
@@ -45,6 +46,10 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
       guestId = newGuest.id
     } else {
       guestId = users[0].id
+      await supabase.from('users').update({
+        full_name: data.setup.nomeProfissional || 'Usuário Convidado (Sistema)',
+        crea_registration: data.setup.registroCrea
+      }).eq('id', guestId)
     }
 
     // 2. Encontrar ou criar a Base de Referência
@@ -75,7 +80,9 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
       .insert([{
         user_id: guestId,
         name: data.setup.nomeObra || "Orçamento Sem Nome",
-        client_name: data.setup.cliente || "Cliente Não Informado"
+        description: data.setup.descricaoObra || null,
+        client_name: data.setup.cliente || "Cliente Não Informado",
+        client_document: data.setup.documentoCliente
       }])
       .select('id')
       .single()
@@ -103,7 +110,7 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
         total_direct_cost: subtotal,
         total_bdi_value: totalBdiValue,
         total_sale_price: totalSalePrice,
-        is_desonerated: false // Default temp
+        is_desonerated: data.setup.isDesonerado
       }])
       .select('id')
       .single()
