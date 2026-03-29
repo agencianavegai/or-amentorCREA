@@ -76,7 +76,7 @@ ${prompt ? `\n\nPrompt adicional do usuário (REFINAMENTO / AJUSTE): "${prompt}"
   } catch (error: unknown) {
     console.error("Erro na rota /api/suggest-services:", error);
     return NextResponse.json(
-      { error: "Erro interno no servidor ao processar a requisição com a IA." },
+      { error: "Erro interno: " + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     );
   }
