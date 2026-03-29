@@ -1,7 +1,7 @@
 import { WizardForm } from "@/components/wizard/WizardForm"
 
 export const metadata = {
-  title: "Novo Orçamento | Copiloto CREA",
+  title: "Novo Orçamento | EngIA - CREA",
 }
 
 export default function NovoOrcamentoPage() {

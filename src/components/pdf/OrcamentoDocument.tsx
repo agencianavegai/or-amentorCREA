@@ -146,7 +146,7 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral, dateSt
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>ORÇAMENTO DE ENGENHARIA</Text>
-            <Text style={{ fontSize: 9, marginTop: 4, color: '#4a5568' }}>Gerado pelo Copiloto CREA</Text>
+            <Text style={{ fontSize: 9, marginTop: 4, color: '#4a5568' }}>Gerado pelo EngIA - CREA</Text>
           </View>
           <View style={styles.headerInfo}>
             <Text>Data: {currentDateStr}</Text>

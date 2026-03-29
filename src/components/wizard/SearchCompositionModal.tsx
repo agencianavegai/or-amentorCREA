@@ -3,6 +3,7 @@ import { Search, X, Loader2 } from "lucide-react"
 import { useDebounce } from "@/hooks/useDebounce"
 import { searchCompositions, CompositionItem } from "@/services/compositions"
 import { Badge } from "@/components/ui/Badge"
+import { BASE_IDS } from "@/lib/constants"
 
 interface SearchCompositionModalProps {
   isOpen: boolean
@@ -106,8 +107,8 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
                   <div className="flex justify-between items-start w-full">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-crea-blue-900 group-hover:text-crea-blue-700">{item.code}</span>
-                      <Badge variant={item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'sinapi' : item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'sicro' : 'default'} className="text-[10px] py-0">
-                        {item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'SINAPI' : item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'SICRO' : 'Desconhecido'}
+                      <Badge variant={item.base_id === BASE_IDS.SINAPI ? 'sinapi' : item.base_id === BASE_IDS.SICRO ? 'sicro' : 'default'} className="text-[10px] py-0">
+                        {item.base_id === BASE_IDS.SINAPI ? 'SINAPI' : item.base_id === BASE_IDS.SICRO ? 'SICRO' : 'Desconhecido'}
                       </Badge>
                     </div>
                     <span className="text-xs font-semibold text-crea-gray-500 bg-crea-gray-100 px-2 py-0.5 rounded">{item.unit}</span>

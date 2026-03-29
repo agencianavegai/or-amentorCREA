@@ -17,6 +17,7 @@ import { CompositionDetail } from "./CompositionDetail"
 import { Badge } from "@/components/ui/Badge"
 import { saveBudget } from "@/actions/budget"
 import { useRouter } from "next/navigation"
+import { BASE_IDS } from "@/lib/constants"
 
 const DownloadPdfButton = dynamic(() => import('@/components/pdf/DownloadPdfButton'), {
   ssr: false
@@ -65,7 +66,7 @@ export function WizardForm() {
         descricaoObra: "",
         cliente: "",
         documentoCliente: "",
-        basesReferencia: ["sinapi"],
+        basesReferencia: [BASE_IDS.SINAPI],
         mesReferencia: "",
         isDesonerado: false,
       },
@@ -134,9 +135,9 @@ export function WizardForm() {
   }, [currentStep, hasAutoAnalyzed, aiSuggestions.length, form])
 
   const handleSelectComposition = (item: CompositionItem) => {
-    // Definimos a origem baseada no ID retornado do supabase (gambiarra rápida para UI, o ideal seria join na tabela)
-    const fonte = item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'SINAPI' : 
-                  item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'SICRO' : 'Desconhecido'
+    // Definimos a origem baseada no ID retornado do supabase
+    const fonte = item.base_id === BASE_IDS.SINAPI ? 'SINAPI' : 
+                  item.base_id === BASE_IDS.SICRO ? 'SICRO' : 'Desconhecido'
 
     appendItem({
       composicaoId: item.id,
@@ -316,11 +317,11 @@ export function WizardForm() {
                       <label className="text-sm font-semibold text-crea-gray-700">Bases de Referência</label>
                       <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 cursor-pointer bg-white border border-crea-gray-200 px-4 py-3 rounded-lg hover:border-crea-blue-300 transition-colors">
-                          <input type="checkbox" value="sinapi" {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
+                          <input type="checkbox" value={BASE_IDS.SINAPI} {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
                           <span className="text-sm font-semibold text-crea-gray-800">SINAPI MA</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer bg-white border border-crea-gray-200 px-4 py-3 rounded-lg hover:border-crea-blue-300 transition-colors">
-                          <input type="checkbox" value="sicro" {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
+                          <input type="checkbox" value={BASE_IDS.SICRO} {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
                           <span className="text-sm font-semibold text-crea-gray-800">SICRO</span>
                         </label>
                         <label className="flex items-center gap-2 opacity-50 cursor-not-allowed bg-crea-gray-50 border border-crea-gray-200 px-4 py-3 rounded-lg">

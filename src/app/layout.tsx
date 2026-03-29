@@ -6,7 +6,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Copiloto de Orçamentos | CREA-MA",
+  title: "EngIA - CREA | CREA-MA",
   description: "Plataforma de orçamentação de engenharia integrada com SINAPI e SICRO.",
   manifest: "/manifest.json",
 };

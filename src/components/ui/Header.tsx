@@ -11,8 +11,8 @@ export function Header() {
             <Calculator className="h-5 w-5" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-bold text-crea-blue-900 leading-none">Copiloto</span>
-            <span className="text-[10px] font-bold text-crea-blue-600 uppercase tracking-widest leading-normal">de Orçamentos</span>
+            <span className="text-lg font-bold text-crea-blue-900 leading-none">EngIA</span>
+            <span className="text-[10px] font-bold text-crea-blue-600 uppercase tracking-widest leading-normal">- CREA</span>
           </div>
         </Link>
         
