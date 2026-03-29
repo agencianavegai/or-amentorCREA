@@ -1,0 +1,563 @@
+"use client"
+
+import * as React from "react"
+import dynamic from "next/dynamic"
+import { useForm, useFieldArray } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Search, Plus, Trash2, Calculator, Save, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
+
+import { orcamentoWizardSchema, OrcamentoWizardData } from "@/lib/schemas/orcamento"
+import { Stepper } from "@/components/ui/Stepper"
+import { Button } from "@/components/ui/Button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card"
+import { SearchCompositionModal } from "./SearchCompositionModal"
+import { CompositionItem } from "@/services/compositions"
+import { saveBudget } from "@/actions/budget"
+
+const DownloadPdfButton = dynamic(() => import('@/components/pdf/DownloadPdfButton'), {
+  ssr: false
+})
+
+const WIZARD_STEPS = [
+  "Setup",
+  "Busca",
+  "Quantitativos",
+  "Custo Direto",
+  "BDI",
+  "Resumo",
+]
+
+export function WizardForm() {
+  const [currentStep, setCurrentStep] = React.useState(0)
+  const totalSteps = WIZARD_STEPS.length
+
+  // IA Search State
+  const [aiSearchText, setAiSearchText] = React.useState("")
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false)
+  const [aiSuggestions, setAiSuggestions] = React.useState<{etapa: string, sugestao_busca: string, justificativa: string}[]>([])
+  const [aiError, setAiError] = React.useState("")
+
+  // Search Modal State
+  const [isSearchModalOpen, setIsSearchModalOpen] = React.useState(false)
+  const [currentSearchTerm, setCurrentSearchTerm] = React.useState("")
+
+  // Submission State
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [saveSuccess, setSaveSuccess] = React.useState(false)
+  const [saveError, setSaveError] = React.useState("")
+  const [finalData, setFinalData] = React.useState<OrcamentoWizardData | null>(null)
+
+  const form = useForm<OrcamentoWizardData>({
+    // @ts-expect-error: Incompatibilidade de tipos temporária entre hookform/resolvers e zod
+    resolver: zodResolver(orcamentoWizardSchema),
+    defaultValues: {
+      setup: {
+        nomeObra: "",
+        cliente: "",
+        baseReferencia: "sinapi",
+        mesReferencia: "",
+      },
+      quantitativos: {
+        itens: []
+      }
+    },
+    mode: "onChange",
+  })
+
+  // Watchers & Field Array
+  const { fields: quantitativoItems, append: appendItem, remove: removeItem } = useFieldArray({
+    control: form.control,
+    name: "quantitativos.itens"
+  })
+
+  const watchItens = form.watch("quantitativos.itens") || []
+  const subtotalGeral = watchItens.reduce((acc, item) => acc + ((item.quantidade || 0) * (item.custoUnitario || 0)), 0)
+
+  const handleAiSearch = async () => {
+    if (!aiSearchText.trim()) return
+    setIsAnalyzing(true)
+    setAiError("")
+    try {
+      const res = await fetch("/api/suggest-services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiSearchText })
+      })
+      if (!res.ok) throw new Error("Falha na API: " + res.statusText)
+      const result = await res.json()
+      setAiSuggestions(result.data || [])
+    } catch (error: unknown) {
+      console.error("[AI Search Error]: ", error)
+      const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro ao processar sua busca."
+      setAiError(errorMessage)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleSelectComposition = (item: CompositionItem) => {
+    appendItem({
+      composicaoId: item.id,
+      descricao: `${item.code} - ${item.description}`,
+      unidade: item.unit,
+      custoUnitario: item.unit_cost,
+      quantidade: 0,
+    })
+    setIsSearchModalOpen(false)
+  }
+
+  const openSearch = (term: string = "") => {
+    setCurrentSearchTerm(term)
+    setIsSearchModalOpen(true)
+  }
+
+  const nextStep = () => {
+    if (currentStep < totalSteps - 1) {
+      setCurrentStep((prev) => prev + 1)
+    }
+  }
+
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep((prev) => prev - 1)
+    }
+  }
+
+  const onSubmit = async (data: OrcamentoWizardData) => {
+    setIsSaving(true)
+    setSaveError("")
+    try {
+      const res = await saveBudget(data)
+      if (res.success) {
+        setSaveSuccess(true)
+        setFinalData(data)
+      } else {
+        setSaveError(res.error || "Erro desconhecido ao salvar o orçamento no banco.")
+      }
+    } catch {
+      setSaveError("Erro de comunicação ao salvar o orçamento.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 lg:gap-8">
+      <Stepper 
+        currentStep={currentStep} 
+        totalSteps={totalSteps} 
+        labels={WIZARD_STEPS} 
+      />
+
+      <SearchCompositionModal 
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        initialSearch={currentSearchTerm}
+        onSelect={handleSelectComposition}
+      />
+
+      {/* @ts-expect-error type mismatched between rhf and schema temporarily */}
+      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full">
+        <Card className="w-full overflow-hidden flex flex-col min-h-[500px]">
+          
+          <div className="flex-1">
+            {/* Step 1: Setup */}
+            {currentStep === 0 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 mb-4">
+                  <CardTitle>Setup do Projeto</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-crea-gray-700">Nome da Obra</label>
+                    <input 
+                      {...form.register("setup.nomeObra")}
+                      className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                      placeholder="Ex: Reforma da Praça Central" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-crea-gray-700">Cliente / Órgão</label>
+                    <input 
+                      {...form.register("setup.cliente")}
+                      className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                      placeholder="Nome do cliente" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-crea-gray-700">Base de Referência</label>
+                      <select 
+                        {...form.register("setup.baseReferencia")}
+                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50">
+                        <option value="sinapi">SINAPI</option>
+                        <option value="sicro">SICRO</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-crea-gray-700">Mês de Referência (Opcional)</label>
+                      <input 
+                        type="month"
+                        {...form.register("setup.mesReferencia")}
+                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </div>
+            )}
+
+            {/* Step 2: Busca por IA */}
+            {currentStep === 1 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 mb-4">
+                  <CardTitle>Assistente de Busca (IA)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-crea-gray-700">Descreva o serviço para a IA encontrar na base selecionada</label>
+                    <div className="flex gap-2 relative">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-3 h-5 w-5 text-crea-gray-400" />
+                        <input 
+                          value={aiSearchText}
+                          onChange={(e) => setAiSearchText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAiSearch())}
+                          className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white pl-10 pr-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                          placeholder="Ex: Concretagem de laje fck 25 MPa" 
+                        />
+                      </div>
+                      <Button type="button" variant="primary" onClick={handleAiSearch} disabled={isAnalyzing || !aiSearchText.trim()}>
+                        {isAnalyzing ? "..." : "Buscar"}
+                      </Button>
+                    </div>
+                    {aiError && <p className="text-sm text-red-500 font-medium">{aiError}</p>}
+                  </div>
+                  
+                  {/* Área de Resultados */}
+                  {aiSuggestions.length > 0 ? (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-crea-blue-900">Sugestões Encontradas:</h4>
+                      {aiSuggestions.map((sug, i) => (
+                        <div key={i} className="p-4 bg-white border border-crea-gray-200 rounded-lg shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:justify-between items-start gap-2 mb-2">
+                            <span className="font-semibold text-crea-gray-900 text-sm">{sug.etapa}</span>
+                            <span className="text-xs font-semibold text-crea-blue-700 bg-crea-blue-50 border border-crea-blue-200 px-2 py-1 rounded inline-block">{sug.sugestao_busca}</span>
+                          </div>
+                          <p className="text-sm text-crea-gray-600 block mb-3">{sug.justificativa}</p>
+                          <Button size="sm" variant="outline" type="button" onClick={() => openSearch(sug.sugestao_busca)}>
+                            <Search className="w-4 h-4 mr-2" /> Buscar no Supabase
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-40 border border-dashed border-crea-gray-300 rounded-lg flex flex-col items-center justify-center bg-crea-gray-50/50 space-y-2 p-4 text-center">
+                      {isAnalyzing ? (
+                        <>
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-crea-blue-600"></div>
+                          <span className="text-sm font-medium text-crea-gray-500">Decompondo projeto com a IA...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-8 w-8 text-crea-gray-300" />
+                          <span className="text-sm font-medium text-crea-gray-500">Nenhuma busca realizada</span>
+                          <span className="text-xs text-crea-gray-400">Os resultados do Assistente de IA aparecerão aqui</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </div>
+            )}
+
+            {/* Step 3: Quantitativos */}
+            {currentStep === 2 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col h-full">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Seleção e Quantificação</CardTitle>
+                    <Button type="button" size="sm" variant="primary" onClick={() => openSearch("")}>
+                      <Plus className="w-4 h-4 mr-1" /> Novo Item
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5 p-4 flex-1">
+                  
+                  {quantitativoItems.length === 0 ? (
+                    <div className="h-40 border border-dashed border-crea-gray-300 rounded-lg flex flex-col items-center justify-center bg-crea-gray-50/50 space-y-2 p-4 text-center">
+                      <span className="text-sm font-medium text-crea-gray-500">Nenhum item vinculado.</span>
+                      <Button variant="outline" size="sm" type="button" onClick={() => openSearch("")}>
+                        Buscar na base oficial
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {quantitativoItems.map((field, index) => (
+                        <div key={field.id} className="relative rounded-lg border border-crea-gray-200 p-4 bg-white shadow-sm flex flex-col gap-3">
+                          <button 
+                            type="button" 
+                            onClick={() => removeItem(index)}
+                            className="absolute top-2 right-2 p-1.5 text-red-400 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          
+                          <div className="pr-8 space-y-1">
+                            <span className="text-xs font-bold text-crea-blue-600 uppercase tracking-wider bg-crea-blue-50 px-2 py-0.5 rounded-sm inline-block mb-1">Vinculado BD</span>
+                            <p className="text-sm font-medium text-crea-gray-900 leading-tight">
+                              {form.getValues(`quantitativos.itens.${index}.descricao`)}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-4 items-end mt-2 pt-3 border-t border-crea-gray-100">
+                            <div className="w-full sm:flex-1 space-y-2">
+                              <label className="text-xs font-semibold text-crea-gray-500">Unidade Ref.</label>
+                              <div className="flex h-10 w-full rounded-md border border-crea-gray-200 bg-crea-gray-50 px-3 py-2 text-sm text-crea-gray-700 items-center">
+                                {form.getValues(`quantitativos.itens.${index}.unidade`)} 
+                                <span className="text-crea-gray-400 ml-auto">R$ {form.getValues(`quantitativos.itens.${index}.custoUnitario`)?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                              </div>
+                            </div>
+                            <div className="w-full sm:w-40 space-y-2">
+                              <label className="text-xs font-semibold text-crea-blue-800">Quantidade</label>
+                              <input 
+                                type="number"
+                                step="0.01"
+                                {...form.register(`quantitativos.itens.${index}.quantidade`, { valueAsNumber: true })}
+                                className="flex h-10 w-full rounded-md border-2 border-crea-blue-200 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500" 
+                                placeholder="0.00" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {quantitativoItems.length > 0 && (
+                     <Button variant="ghost" type="button" onClick={() => openSearch("")} className="w-full text-sm font-semibold border-2 border-dashed border-crea-gray-300 text-crea-gray-500 mt-4">
+                       + Buscar mais serviços
+                     </Button>
+                  )}
+                </CardContent>
+              </div>
+            )}
+
+            {/* Step 4: Custo Direto */}
+            {currentStep === 3 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 h-full flex flex-col">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 mb-4 p-4">
+                  <CardTitle>Resumo Estrutural (Custo Direto)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-0 p-0 flex-1 flex flex-col">
+                  
+                  {watchItens.length === 0 ? (
+                    <div className="p-8 text-center text-crea-gray-500 text-sm">
+                      Nenhum item quantificado para calcular.
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-semibold text-crea-gray-500 px-6 py-3 border-b border-crea-gray-200 bg-crea-gray-50">
+                        <div className="col-span-6">DESCRIÇÃO DO SERVIÇO</div>
+                        <div className="col-span-2 text-right">QUANTIDADE</div>
+                        <div className="col-span-2 text-right">VALOR UNIT.</div>
+                        <div className="col-span-2 text-right">TOTAL</div>
+                      </div>
+
+                      <div className="flex flex-col">
+                        {watchItens.map((item, id) => {
+                          const isInvalid = !item.quantidade || item.quantidade <= 0
+                          const rowTotal = (item.quantidade || 0) * (item.custoUnitario || 0)
+                          
+                          return (
+                          <div key={id} className={`flex flex-col sm:grid sm:grid-cols-12 gap-2 items-start sm:items-center px-4 sm:px-6 py-4 border-b border-crea-gray-100 hover:bg-crea-gray-50/50 ${isInvalid && 'bg-red-50/30'}`}>
+                            <div className="col-span-6 flex flex-col w-full">
+                              <span className="text-sm font-medium text-crea-gray-900 line-clamp-2">{item.descricao}</span>
+                              <span className="text-xs text-crea-gray-500 sm:hidden mt-1">{item.quantidade || 0} {item.unidade} x R$ {item.custoUnitario.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="sm:col-span-2 text-left sm:text-right hidden sm:block">
+                              <span className={`text-sm font-semibold ${isInvalid ? 'text-red-500' : 'text-crea-gray-700'}`}>{item.quantidade || 0} <span className="text-xs text-crea-gray-400 font-normal">{item.unidade}</span></span>
+                            </div>
+                            <div className="sm:col-span-2 text-right hidden sm:block">
+                              <span className="text-sm text-crea-gray-600">{(item.custoUnitario || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="sm:col-span-2 text-left sm:text-right w-full sm:w-auto mt-2 sm:mt-0">
+                              <span className="text-sm font-bold text-crea-blue-700">R$ {rowTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            </div>
+                          </div>
+                        )})}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="sticky bottom-0 bg-crea-blue-900 text-white p-5 shadow-lg border-t border-crea-blue-800 flex justify-between items-center z-10">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-crea-blue-300 font-semibold uppercase tracking-wider">Subtotal Geral</span>
+                      <span className="text-sm font-medium text-white max-w-[200px] truncate sm:max-w-none">Custo Direto do Projeto</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Calculator className="w-5 h-5 text-crea-blue-300 hidden sm:block" />
+                      <span className="text-xl sm:text-2xl font-bold tracking-tight">
+                        R$ {subtotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                      </span>
+                    </div>
+                  </div>
+
+                </CardContent>
+              </div>
+            )}
+
+            {/* Step 5: BDI */}
+            {currentStep === 4 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 mb-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Taxa de BDI</CardTitle>
+                    <span className="text-xs font-bold text-crea-blue-600 bg-crea-blue-50 px-2 py-1 rounded">Global: {(
+                      (form.watch("bdi.administracaoCentral") || 0) + 
+                      (form.watch("bdi.lucro") || 0) + 
+                      5.65
+                    ).toFixed(2)}%</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                    <div className="bg-crea-blue-50 border border-crea-blue-100 p-4 rounded-lg flex flex-col gap-2">
+                      <div className="flex flex-row items-center gap-2 text-crea-blue-900 font-bold mb-1">
+                        <Calculator className="w-5 h-5 text-crea-blue-600" /> O que é o BDI?
+                      </div>
+                      <p className="text-sm text-crea-blue-800/80 font-medium">Os Benefícios e Despesas Indiretas compõem a taxa adicionada ao custo direto da obra para cobrir os custos administrativos da construtora, impostos (Simples Nacional, ISS, PIS, COFINS) e para garantir o lucro ou imprevistos da operação.</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-crea-gray-700">Admin. Central (%)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          {...form.register("bdi.administracaoCentral", { valueAsNumber: true })}
+                          className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500"  
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-crea-gray-700">Lucro Desejado (%)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          {...form.register("bdi.lucro", { valueAsNumber: true })}
+                          className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-crea-gray-700">Tributos (Fixo: 5.65%)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          className="flex h-11 w-full rounded-md border border-crea-gray-200 bg-crea-gray-50 px-3 py-2 text-sm text-crea-gray-500" 
+                          value="5.65" 
+                          disabled
+                        />
+                      </div>
+                    </div>
+                </CardContent>
+              </div>
+            )}
+
+            {/* Step 6: Resumo */}
+            {currentStep === 5 && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <CardHeader className="bg-crea-gray-50 border-b border-crea-gray-100 mb-4">
+                  <CardTitle>Fechamento e Exportação</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {!saveSuccess && (
+                    <div className="p-8 bg-crea-gray-50 rounded-xl flex flex-col items-center justify-center text-center space-y-3 border border-crea-gray-200 shadow-sm">
+                      <span className="text-crea-gray-600 font-semibold text-sm uppercase tracking-wider">Valor de Venda Sugerido</span>
+                      <span className="text-4xl sm:text-5xl font-bold text-crea-blue-900 tracking-tight">R$ {(subtotalGeral * (1 + (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + 5.65) / 100))).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
+                  )}
+
+                  {!saveSuccess ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 border border-crea-gray-200 rounded-lg">
+                        <span className="block text-xs text-crea-gray-500 font-medium mb-1">Custo Direto</span>
+                        <span className="block text-lg font-bold text-crea-gray-900">R$ {subtotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      </div>
+                      <div className="p-4 border border-crea-blue-200 bg-crea-blue-50 rounded-lg">
+                        <span className="block text-xs text-crea-blue-600 font-bold mb-1">BDI Adicionado ({( (form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + 5.65 ).toFixed(2)}%)</span>
+                        <span className="block text-lg font-bold text-crea-blue-900">R$ {(subtotalGeral * (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + 5.65) / 100)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 bg-green-50 border border-green-200 rounded-xl flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-green-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-green-800">Orçamento Salvo com Sucesso!</h4>
+                        <p className="text-sm font-medium text-green-700/80 mt-1 max-w-sm mx-auto">Seu projeto foi armazenado de forma segura na base de dados oficial. Você já pode emitir o seu documento PDF.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {saveError && (
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-bold text-red-800">Falha ao salvar</h4>
+                        <p className="text-sm text-red-700 font-medium mt-1">{saveError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!saveSuccess && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-crea-gray-700">Observações Extras para o Documento Final (Opcional)</label>
+                      <textarea 
+                        {...form.register("resumo.observacoes")}
+                        className="flex min-h-[80px] w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 p-3" 
+                        placeholder="Adicione notas ou isenções de responsabilidade comercial..."
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </div>
+            )}
+          </div>
+
+          <CardFooter className="flex flex-col sm:flex-row justify-between border-t border-crea-gray-100 bg-white p-6 gap-3 shrink-0">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full sm:w-auto"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+            >
+              Voltar Etapa
+            </Button>
+            
+            {currentStep < totalSteps - 1 ? (
+              <Button type="button" variant="primary" className="w-full sm:w-auto min-w-[140px]" onClick={nextStep}>
+                Avançar
+              </Button>
+            ) : saveSuccess && finalData ? (
+              <DownloadPdfButton 
+                data={finalData} 
+                subtotal={subtotalGeral} 
+                totalBDI={subtotalGeral * (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + 5.65) / 100)} 
+                totalGeral={subtotalGeral * (1 + (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + 5.65) / 100))} 
+              />
+            ) : (
+              <Button type="submit" variant="primary" className="w-full sm:w-auto font-bold" disabled={isSaving}>
+                {isSaving ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando Banco de Dados...</>
+                ) : (
+                  <><Save className="w-4 h-4 mr-2" /> Salvar Orçamento</>
+                )}
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+      </form>
+    </div>
+  )
+}
