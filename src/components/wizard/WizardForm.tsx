@@ -106,8 +106,12 @@ export function WizardForm() {
           prompt: isAuto ? "" : aiSearchText 
         })
       })
-      if (!res.ok) throw new Error("Falha na API: " + res.statusText)
+      
       const result = await res.json()
+      
+      if (!res.ok) {
+        throw new Error("Falha na API: " + (result.error || res.statusText || "Erro desconhecido"))
+      }
       
       if (result.data?.length > 0) {
         setAiSuggestions(result.data)
