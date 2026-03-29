@@ -25,7 +25,7 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
     const { data: users, error: errUsers } = await supabase
       .from('users')
       .select('id')
-      .eq('email', 'guest@copiloto.app')
+      .eq('email', 'guest@engia-crea.app')
       .limit(1)
 
     let guestId: string
@@ -33,7 +33,7 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
       const { data: newGuest, error: errNewGuest } = await supabase
         .from('users')
         .insert([{ 
-          email: 'guest@copiloto.app', 
+          email: 'guest@engia-crea.app', 
           full_name: data.setup.nomeProfissional || 'Usuário Convidado (Sistema)',
           crea_registration: data.setup.registroCrea
         }])
