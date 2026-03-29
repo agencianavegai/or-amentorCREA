@@ -52,11 +52,12 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
       }).eq('id', guestId)
     }
 
+    const baseNamesConcat = (data.setup.basesReferencia || []).join(' + ') || 'SINAPI'
     // 2. Encontrar ou criar a Base de Referência
     const { data: bases, error: errBases } = await supabase
       .from('reference_bases')
       .select('id')
-      .ilike('name', `%${data.setup.baseReferencia}%`)
+      .ilike('name', `%${baseNamesConcat}%`)
       .limit(1)
       
     let baseId: string
@@ -64,7 +65,7 @@ export async function saveBudget(data: OrcamentoWizardData): Promise<SaveBudgetR
       // Cria mock caso nao encontre
       const { data: newBase, error: errNewBase } = await supabase
         .from('reference_bases')
-        .insert([{ name: data.setup.baseReferencia.toUpperCase() }])
+        .insert([{ name: baseNamesConcat.toUpperCase() }])
         .select('id')
         .single()
       

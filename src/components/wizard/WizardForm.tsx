@@ -12,6 +12,9 @@ import { Button } from "@/components/ui/Button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card"
 import { SearchCompositionModal } from "./SearchCompositionModal"
 import { CompositionItem } from "@/services/compositions"
+import { SelectedItemsPreview } from "./SelectedItemsPreview"
+import { CompositionDetail } from "./CompositionDetail"
+import { Badge } from "@/components/ui/Badge"
 import { saveBudget } from "@/actions/budget"
 import { useRouter } from "next/navigation"
 
@@ -43,6 +46,7 @@ export function WizardForm() {
   // Search Modal State
   const [isSearchModalOpen, setIsSearchModalOpen] = React.useState(false)
   const [currentSearchTerm, setCurrentSearchTerm] = React.useState("")
+  const [expandedItems, setExpandedItems] = React.useState<Record<string, boolean>>({})
 
   // Submission State
   const [isSaving, setIsSaving] = React.useState(false)
@@ -61,7 +65,7 @@ export function WizardForm() {
         descricaoObra: "",
         cliente: "",
         documentoCliente: "",
-        baseReferencia: "sinapi",
+        basesReferencia: ["sinapi"],
         mesReferencia: "",
         isDesonerado: false,
       },
@@ -130,12 +134,17 @@ export function WizardForm() {
   }, [currentStep, hasAutoAnalyzed, aiSuggestions.length, form])
 
   const handleSelectComposition = (item: CompositionItem) => {
+    // Definimos a origem baseada no ID retornado do supabase (gambiarra rápida para UI, o ideal seria join na tabela)
+    const fonte = item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'SINAPI' : 
+                  item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'SICRO' : 'Desconhecido'
+
     appendItem({
       composicaoId: item.id,
       descricao: `${item.code} - ${item.description}`,
       unidade: item.unit,
       custoUnitario: item.unit_cost,
       quantidade: 0,
+      fonteBase: fonte,
     })
     setIsSearchModalOpen(false)
   }
@@ -145,8 +154,35 @@ export function WizardForm() {
     setIsSearchModalOpen(true)
   }
 
-  const nextStep = () => {
-    if (currentStep < totalSteps - 1) {
+  const { formState: { errors } } = form;
+
+  const nextStep = async () => {
+    let isValid = true
+
+    if (currentStep === 0) {
+      isValid = await form.trigger([
+        "setup.nomeProfissional",
+        "setup.registroCrea",
+        "setup.nomeObra",
+        "setup.descricaoObra",
+        "setup.cliente",
+        "setup.documentoCliente",
+        "setup.basesReferencia"
+      ])
+    } else if (currentStep === 2) {
+      isValid = await form.trigger(["quantitativos.itens"])
+      const items = form.getValues("quantitativos.itens") || []
+      if (isValid && items.some(i => !i.quantidade || i.quantidade <= 0)) {
+        isValid = false
+      }
+    } else if (currentStep === 4) {
+      isValid = await form.trigger([
+        "bdi.administracaoCentral",
+        "bdi.lucro"
+      ])
+    }
+
+    if (isValid && currentStep < totalSteps - 1) {
       setCurrentStep((prev) => prev + 1)
     }
   }
@@ -188,6 +224,7 @@ export function WizardForm() {
         onClose={() => setIsSearchModalOpen(false)}
         initialSearch={currentSearchTerm}
         onSelect={handleSelectComposition}
+        baseIds={form.watch("setup.basesReferencia")}
       />
 
       {/* @ts-expect-error type mismatched between rhf and schema temporarily */}
@@ -207,17 +244,19 @@ export function WizardForm() {
                       <label className="text-sm font-semibold text-crea-gray-700">Responsável Técnico</label>
                       <input 
                         {...form.register("setup.nomeProfissional")}
-                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                        className={`flex h-11 w-full rounded-md border ${errors.setup?.nomeProfissional ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50`} 
                         placeholder="Nome completo do engenheiro(a)" 
                       />
+                      {errors.setup?.nomeProfissional && <p className="text-xs text-red-500 font-medium">{errors.setup.nomeProfissional.message}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-crea-gray-700">Registro CREA</label>
                       <input 
                         {...form.register("setup.registroCrea")}
-                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                        className={`flex h-11 w-full rounded-md border ${errors.setup?.registroCrea ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50`} 
                         placeholder="Ex: 123456789-0" 
                       />
+                      {errors.setup?.registroCrea && <p className="text-xs text-red-500 font-medium">{errors.setup.registroCrea.message}</p>}
                     </div>
                   </div>
                   
@@ -225,35 +264,39 @@ export function WizardForm() {
                     <label className="text-sm font-semibold text-crea-gray-700">Nome da Obra</label>
                     <input 
                       {...form.register("setup.nomeObra")}
-                      className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                      className={`flex h-11 w-full rounded-md border ${errors.setup?.nomeObra ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50`} 
                       placeholder="Ex: Reforma da Praça Central" 
                     />
+                    {errors.setup?.nomeObra && <p className="text-xs text-red-500 font-medium">{errors.setup.nomeObra.message}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-crea-gray-700">Descrição Detalhada do Projeto</label>
                     <textarea 
                       {...form.register("setup.descricaoObra")}
                       rows={3}
-                      className="flex w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50 resize-y" 
+                      className={`flex w-full rounded-md border ${errors.setup?.descricaoObra ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 resize-y`} 
                       placeholder="Descreva o máximo de detalhes possível (ex: terreno 10x20m, 2 andares, acabamento médio, telhado colonial...)" 
                     />
+                    {errors.setup?.descricaoObra && <p className="text-xs text-red-500 font-medium">{errors.setup.descricaoObra.message}</p>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-crea-gray-700">Cliente / Órgão</label>
                       <input 
                         {...form.register("setup.cliente")}
-                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                        className={`flex h-11 w-full rounded-md border ${errors.setup?.cliente ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50`} 
                         placeholder="Nome do cliente" 
                       />
+                      {errors.setup?.cliente && <p className="text-xs text-red-500 font-medium">{errors.setup.cliente.message}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-crea-gray-700">CPF ou CNPJ</label>
                       <input 
                         {...form.register("setup.documentoCliente")}
-                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50" 
+                        className={`flex h-11 w-full rounded-md border ${errors.setup?.documentoCliente ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50`} 
                         placeholder="Somente números" 
                       />
+                      {errors.setup?.documentoCliente && <p className="text-xs text-red-500 font-medium">{errors.setup.documentoCliente.message}</p>}
                     </div>
                   </div>
                   
@@ -269,14 +312,24 @@ export function WizardForm() {
                     </label>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-crea-gray-700">Base de Referência</label>
-                      <select 
-                        {...form.register("setup.baseReferencia")}
-                        className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500 disabled:opacity-50">
-                        <option value="sinapi">SINAPI</option>
-                        <option value="sicro">SICRO</option>
-                      </select>
+                    <div className="space-y-3 col-span-1 sm:col-span-2">
+                      <label className="text-sm font-semibold text-crea-gray-700">Bases de Referência</label>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer bg-white border border-crea-gray-200 px-4 py-3 rounded-lg hover:border-crea-blue-300 transition-colors">
+                          <input type="checkbox" value="sinapi" {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
+                          <span className="text-sm font-semibold text-crea-gray-800">SINAPI MA</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer bg-white border border-crea-gray-200 px-4 py-3 rounded-lg hover:border-crea-blue-300 transition-colors">
+                          <input type="checkbox" value="sicro" {...form.register("setup.basesReferencia")} className="w-4 h-4 text-crea-blue-600 rounded border-gray-300 focus:ring-crea-blue-500" />
+                          <span className="text-sm font-semibold text-crea-gray-800">SICRO</span>
+                        </label>
+                        <label className="flex items-center gap-2 opacity-50 cursor-not-allowed bg-crea-gray-50 border border-crea-gray-200 px-4 py-3 rounded-lg">
+                          <input type="checkbox" value="propria" disabled className="w-4 h-4 text-crea-gray-400 rounded border-gray-300" />
+                          <span className="text-sm font-semibold text-crea-gray-600">Tabela Própria</span>
+                          <Badge variant="warning" className="ml-1 text-[10px] py-0 px-1 font-bold">Em breve</Badge>
+                        </label>
+                      </div>
+                      {errors.setup?.basesReferencia && <p className="text-xs text-red-500 font-medium mt-1">{errors.setup.basesReferencia.message}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-crea-gray-700">Mês de Referência (Opcional)</label>
@@ -344,7 +397,7 @@ export function WizardForm() {
                           </div>
                           <p className="text-sm text-crea-gray-600 block mb-3">{sug.justificativa}</p>
                           <Button size="sm" variant="outline" type="button" onClick={() => openSearch(sug.sugestao_busca)}>
-                            <Search className="w-4 h-4 mr-2" /> Buscar no Supabase
+                            <Search className="w-4 h-4 mr-2" /> Verificar composições
                           </Button>
                         </div>
                       ))}
@@ -365,6 +418,11 @@ export function WizardForm() {
                       )}
                     </div>
                   )}
+
+                  <SelectedItemsPreview 
+                    items={watchItens.map(i => ({ code: i.descricao.split(' - ')[0], ...i }))} 
+                    onRemove={removeItem} 
+                  />
                 </CardContent>
               </div>
             )}
@@ -427,6 +485,22 @@ export function WizardForm() {
                               />
                             </div>
                           </div>
+                          
+                          <div className="mt-2 text-right">
+                            <button 
+                              type="button" 
+                              onClick={() => setExpandedItems(prev => ({ ...prev, [field.id]: !prev[field.id] }))}
+                              className="text-xs font-semibold text-crea-blue-600 hover:text-crea-blue-800 transition-colors"
+                            >
+                              {expandedItems[field.id] ? "Ocultar Detalhamento" : "Ver Detalhamento Analítico"}
+                            </button>
+                          </div>
+                          
+                          {expandedItems[field.id] && (
+                            <div className="mt-2 pt-3 border-t border-crea-gray-100">
+                              <CompositionDetail compositionId={form.getValues(`quantitativos.itens.${index}.composicaoId`)} />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -533,8 +607,9 @@ export function WizardForm() {
                           type="number"
                           step="0.01"
                           {...form.register("bdi.administracaoCentral", { valueAsNumber: true })}
-                          className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500"  
+                          className={`flex h-11 w-full rounded-md border ${errors.bdi?.administracaoCentral ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2`}  
                         />
+                        {errors.bdi?.administracaoCentral && <p className="text-xs text-red-500 font-medium">{errors.bdi.administracaoCentral.message}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-crea-gray-700">Lucro Desejado (%)</label>
@@ -542,8 +617,9 @@ export function WizardForm() {
                           type="number"
                           step="0.01"
                           {...form.register("bdi.lucro", { valueAsNumber: true })}
-                          className="flex h-11 w-full rounded-md border border-crea-gray-300 bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-crea-blue-500 focus:border-crea-blue-500" 
+                          className={`flex h-11 w-full rounded-md border ${errors.bdi?.lucro ? 'border-red-500 focus:ring-red-500' : 'border-crea-gray-300 focus:ring-crea-blue-500 focus:border-crea-blue-500'} bg-white px-3 py-2 text-sm text-crea-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2`} 
                         />
+                        {errors.bdi?.lucro && <p className="text-xs text-red-500 font-medium">{errors.bdi.lucro.message}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-crea-gray-700">Tributos ({taxaImpostos}%)</label>
@@ -567,24 +643,56 @@ export function WizardForm() {
                   <CardTitle>Fechamento e Exportação</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {!saveSuccess && (
-                    <div className="p-8 bg-crea-gray-50 rounded-xl flex flex-col items-center justify-center text-center space-y-3 border border-crea-gray-200 shadow-sm">
-                      <span className="text-crea-gray-600 font-semibold text-sm uppercase tracking-wider">Valor de Venda Sugerido</span>
-                      <span className="text-4xl sm:text-5xl font-bold text-crea-blue-900 tracking-tight">R$ {(subtotalGeral * (1 + (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + taxaImpostos) / 100))).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                    </div>
-                  )}
-
                   {!saveSuccess ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 border border-crea-gray-200 rounded-lg">
-                        <span className="block text-xs text-crea-gray-500 font-medium mb-1">Custo Direto</span>
-                        <span className="block text-lg font-bold text-crea-gray-900">R$ {subtotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                      </div>
-                      <div className="p-4 border border-crea-blue-200 bg-crea-blue-50 rounded-lg">
-                        <span className="block text-xs text-crea-blue-600 font-bold mb-1">BDI Adicionado ({( (form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + taxaImpostos ).toFixed(2)}%)</span>
-                        <span className="block text-lg font-bold text-crea-blue-900">R$ {(subtotalGeral * (((form.getValues("bdi.administracaoCentral") || 4) + (form.getValues("bdi.lucro") || 7.4) + taxaImpostos) / 100)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                      </div>
-                    </div>
+                    (() => {
+                      const bdiAdmin = form.watch("bdi.administracaoCentral") || 4
+                      const bdiLucro = form.watch("bdi.lucro") || 7.4
+                      const bdiDeson = bdiAdmin + bdiLucro + 4.50
+                      const bdiNaoDeson = bdiAdmin + bdiLucro + 8.65
+                      
+                      const totalDeson = subtotalGeral * (1 + bdiDeson / 100)
+                      const totalNaoDeson = subtotalGeral * (1 + bdiNaoDeson / 100)
+                      
+                      const selectedIsDeson = form.watch("setup.isDesonerado")
+                      const mainTotal = selectedIsDeson ? totalDeson : totalNaoDeson
+                      const mainBdi = selectedIsDeson ? bdiDeson : bdiNaoDeson
+
+                      return (
+                        <>
+                          <div className="p-8 bg-crea-gray-50 rounded-xl flex flex-col items-center justify-center text-center space-y-3 border border-crea-gray-200 shadow-sm relative overflow-hidden">
+                            {selectedIsDeson && (
+                              <div className="absolute top-0 w-full bg-crea-blue-100 text-crea-blue-800 text-xs font-bold py-1 px-4 text-center">
+                                REGIME DE DESONERAÇÃO (CPRB) APLICADO
+                              </div>
+                            )}
+                            <span className="text-crea-gray-600 font-semibold text-sm uppercase tracking-wider mt-4">Valor de Venda Sugerido</span>
+                            <span className="text-4xl sm:text-5xl font-bold text-crea-blue-900 tracking-tight">R$ {mainTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            
+                            <div className="flex gap-4 mt-6 pt-4 border-t border-crea-gray-200 w-full max-w-md mx-auto justify-between px-4">
+                               <div className="flex flex-col text-left">
+                                  <span className="text-xs font-semibold text-crea-gray-500">Com Desoneração (4.50%)</span>
+                                  <span className={`text-sm font-bold ${selectedIsDeson ? 'text-crea-blue-700' : 'text-crea-gray-600'}`}>R$ {totalDeson.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                               </div>
+                               <div className="flex flex-col text-right">
+                                  <span className="text-xs font-semibold text-crea-gray-500">Sem Desoneração (8.65%)</span>
+                                  <span className={`text-sm font-bold ${!selectedIsDeson ? 'text-crea-blue-700' : 'text-crea-gray-600'}`}>R$ {totalNaoDeson.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                               </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 border border-crea-gray-200 rounded-lg">
+                              <span className="block text-xs text-crea-gray-500 font-medium mb-1">Custo Direto</span>
+                              <span className="block text-lg font-bold text-crea-gray-900">R$ {subtotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="p-4 border border-crea-blue-200 bg-crea-blue-50 rounded-lg relative">
+                              <span className="block text-xs text-crea-blue-600 font-bold mb-1">BDI Adicionado ({mainBdi.toFixed(2)}%)</span>
+                              <span className="block text-lg font-bold text-crea-blue-900">R$ {(subtotalGeral * (mainBdi / 100)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                            </div>
+                          </div>
+                        </>
+                      )
+                    })()
                   ) : (
                     <div className="p-8 bg-green-50 border border-green-200 rounded-xl flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">

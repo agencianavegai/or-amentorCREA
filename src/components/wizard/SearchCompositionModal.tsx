@@ -2,25 +2,34 @@ import React, { useState, useEffect } from "react"
 import { Search, X, Loader2 } from "lucide-react"
 import { useDebounce } from "@/hooks/useDebounce"
 import { searchCompositions, CompositionItem } from "@/services/compositions"
+import { Badge } from "@/components/ui/Badge"
 
 interface SearchCompositionModalProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (item: CompositionItem) => void
   initialSearch?: string
-  baseId?: string
+  baseIds?: string[]
 }
 
-export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearch = "", baseId }: SearchCompositionModalProps) {
+export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearch = "", baseIds }: SearchCompositionModalProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearch)
   const debouncedSearch = useDebounce(searchTerm, 300)
   const [results, setResults] = useState<CompositionItem[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // Initialize early
+  // Initialize early and extract keywords if initialSearch is too long
   useEffect(() => {
     if (isOpen) {
-      setSearchTerm(initialSearch)
+      if (initialSearch.length > 40) {
+        // Extrai palavras-chave básicas se o texto for muito longo
+        const words = initialSearch.toLowerCase().replace(/[^\w\sà-ú]/gi, '').split(/\s+/)
+        const stopWords = ['para', 'com', 'sem', 'dos', 'das', 'uma', 'como', 'sobre', 'sob', 'por']
+        const keywords = words.filter(w => w.length > 3 && !stopWords.includes(w)).slice(0, 3).join(' ')
+        setSearchTerm(keywords || initialSearch.substring(0, 40))
+      } else {
+        setSearchTerm(initialSearch)
+      }
     } else {
       setSearchTerm("")
       setResults([])
@@ -29,13 +38,10 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
 
   useEffect(() => {
     async function fetchResults() {
-      if (!debouncedSearch || debouncedSearch.length < 2) {
-        setResults([])
-        return
-      }
+      // Se não tem texto e não está carregando inicial, também busca para mostrar um "Top Destaques"
       setIsSearching(true)
       try {
-        const data = await searchCompositions(debouncedSearch, baseId)
+        const data = await searchCompositions(debouncedSearch, baseIds)
         setResults(data)
       } catch (err) {
         console.error("Erro na busca", err)
@@ -47,7 +53,7 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
     if (isOpen) {
       fetchResults()
     }
-  }, [debouncedSearch, isOpen, baseId])
+  }, [debouncedSearch, isOpen, baseIds])
 
   if (!isOpen) return null
 
@@ -80,12 +86,12 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {debouncedSearch.length < 2 ? (
+          {isSearching && results.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-crea-gray-400 space-y-2 p-6 text-center">
-              <Search className="w-8 h-8 opacity-20" />
-              <p className="text-sm">Digite pelo menos 2 caracteres para buscar na base oficial.</p>
+              <Loader2 className="w-8 h-8 opacity-50 animate-spin" />
+              <p className="text-sm">Buscando na base oficial...</p>
             </div>
-          ) : results.length === 0 && !isSearching ? (
+          ) : results.length === 0 ? (
             <div className="h-full flex items-center justify-center text-crea-gray-500 p-6 text-center">
               <p className="text-sm">Nenhuma composição encontrada para &ldquo;{debouncedSearch}&rdquo;.</p>
             </div>
@@ -98,7 +104,12 @@ export function SearchCompositionModal({ isOpen, onClose, onSelect, initialSearc
                   className="w-full text-left p-3 hover:bg-crea-blue-50 border border-transparent hover:border-crea-blue-100 rounded-lg transition-colors group flex flex-col gap-1"
                 >
                   <div className="flex justify-between items-start w-full">
-                    <span className="font-bold text-sm text-crea-blue-900 group-hover:text-crea-blue-700">{item.code}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-crea-blue-900 group-hover:text-crea-blue-700">{item.code}</span>
+                      <Badge variant={item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'sinapi' : item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'sicro' : 'default'} className="text-[10px] py-0">
+                        {item.base_id === '434bd8c9-d59e-411f-beab-2a2e681b809e' ? 'SINAPI' : item.base_id === '3a3498c8-82a3-485a-bb09-0edef36e1819' ? 'SICRO' : 'Desconhecido'}
+                      </Badge>
+                    </div>
                     <span className="text-xs font-semibold text-crea-gray-500 bg-crea-gray-100 px-2 py-0.5 rounded">{item.unit}</span>
                   </div>
                   <span className="text-sm text-crea-gray-700 leading-snug line-clamp-2">{item.description}</span>

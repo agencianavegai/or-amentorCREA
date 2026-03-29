@@ -8,7 +8,7 @@ export const setupSchema = z.object({
   descricaoObra: z.string().optional(),
   cliente: z.string().min(2, "Nome do cliente é obrigatório"),
   documentoCliente: z.string().min(11, "CPF/CNPJ inválido"),
-  baseReferencia: z.enum(["sinapi", "sicro"]),
+  basesReferencia: z.array(z.string()).min(1, "Selecione ao menos uma base"),
   mesReferencia: z.string().optional(),
   isDesonerado: z.boolean().default(false),
 })
@@ -25,6 +25,7 @@ export const quantitativoItemSchema = z.object({
   unidade: z.string(),
   quantidade: z.number().positive("Quantidade deve ser maior que zero"),
   custoUnitario: z.number().nonnegative(),
+  fonteBase: z.string().optional(),
 })
 
 export const quantitativosSchema = z.object({

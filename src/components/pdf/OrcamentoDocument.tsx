@@ -127,13 +127,16 @@ interface OrcamentoDocProps {
   subtotal: number;
   totalBDI: number;
   totalGeral: number;
+  dateStr?: string;
 }
 
-export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: OrcamentoDocProps) => {
+export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral, dateStr }: OrcamentoDocProps) => {
   const adminBdi = data.bdi?.administracaoCentral || 4.0;
   const lucroBdi = data.bdi?.lucro || 7.4;
   const taxRate = 5.65;
   const globalBdi = adminBdi + lucroBdi + taxRate;
+  
+  const currentDateStr = dateStr || new Date().toLocaleDateString('pt-BR');
 
   return (
     <Document>
@@ -146,7 +149,7 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: Orca
             <Text style={{ fontSize: 9, marginTop: 4, color: '#4a5568' }}>Gerado pelo Copiloto CREA</Text>
           </View>
           <View style={styles.headerInfo}>
-            <Text>Data: {new Date().toLocaleDateString('pt-BR')}</Text>
+            <Text>Data: {currentDateStr}</Text>
             <Text>Validade: 30 dias</Text>
           </View>
         </View>
@@ -167,7 +170,7 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: Orca
           </View>
           <View style={styles.rowInfo}>
             <Text style={styles.label}>Base de Referência:</Text>
-            <Text style={styles.value}>{data.setup.baseReferencia.toUpperCase()} {data.setup.mesReferencia && `- ${data.setup.mesReferencia}`}</Text>
+            <Text style={styles.value}>{(data.setup.basesReferencia || []).join(' + ').toUpperCase()} {data.setup.mesReferencia ? `- ${data.setup.mesReferencia}` : ""}</Text>
           </View>
         </View>
 
@@ -210,14 +213,14 @@ export const OrcamentoDocument = ({ data, subtotal, totalBDI, totalGeral }: Orca
 
         {/* Rodapé e Assinatura */}
         <View style={styles.footer}>
-          {data.resumo?.observacoes && (
+          {!!data.resumo?.observacoes ? (
             <View style={{ marginBottom: 20 }}>
               <Text style={{ fontSize: 9, fontWeight: 'bold' }}>Observações:</Text>
               <Text style={{ fontSize: 8, color: '#4a5568', marginTop: 3 }}>
                 {data.resumo.observacoes}
               </Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine} />
